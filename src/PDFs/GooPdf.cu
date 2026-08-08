@@ -236,7 +236,7 @@ __host__ int GooPdf::findFunctionIdx(void *dev_functionPtr) {
 */
 __host__ void GooPdf::setDebugMask(int mask, bool setSpecific) const {
     cpuDebug = mask;
-#if THRUST_DEVICE_SYSTEM != THRUST_DEVICE_SYSTEM_CUDA
+#if !GOOFIT_DEVICE_IS_GPU
     gpuDebug = cpuDebug;
 
     if(setSpecific)

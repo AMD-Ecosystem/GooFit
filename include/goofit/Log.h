@@ -70,7 +70,7 @@ namespace GooFit {
     }
 
 #ifdef GOOFIT_DEBUG_FLAG
-#ifndef __CUDA_ARCH__
+#if !defined(__CUDA_ARCH__) && !defined(__HIP_DEVICE_COMPILE__)
 #define GOOFIT_DEBUG(...)                                                                                              \
     {                                                                                                                  \
         std::cout << GooFit::reset << GooFit::cyan << GooFit::bold << "DEBUG: ";                                       \
@@ -103,7 +103,7 @@ namespace GooFit {
     }
 #endif
 #ifdef GOOFIT_TRACE_FLAG
-#ifndef __CUDA_ARCH__
+#if !defined(__CUDA_ARCH__) && !defined(__HIP_DEVICE_COMPILE__)
 #define GOOFIT_TRACE(...)                                                                                              \
     {                                                                                                                  \
         std::cout << GooFit::reset << GooFit::cyan << "TRACE: ";                                                       \

@@ -3,6 +3,8 @@
 #include <thrust/detail/config.h> // __host__, __device__ defines
 #include <thrust/system_error.h>  // Error types
 
+#include <goofit/detail/CudaCompat.h>
+
 #include <goofit/Error.h>
 #include <goofit/Log.h>
 
@@ -24,7 +26,9 @@ extern int host_callnumber;
 
 // Allow code to work on non-CUDA systems (beyond what is provided with thrust).
 // Older Thrust defined __host__/__device__ for non-CUDA backends; modern CCCL
-// (3.x) no longer does, so define them here for plain-C++ compilation.
+// (3.x) no longer does, so define them here for plain-C++ compilation. hipcc
+// already defines both by the time any user header is seen, so the guards make
+// this inert when compiling device code for AMD GPUs.
 #if THRUST_DEVICE_SYSTEM != THRUST_DEVICE_SYSTEM_CUDA
 #ifndef __host__
 #define __host__
@@ -32,6 +36,10 @@ extern int host_callnumber;
 #ifndef __device__
 #define __device__
 #endif
+#endif
+
+// Allow code to work on non-GPU systems (beyond what is provided with thrust)
+#if !GOOFIT_DEVICE_IS_GPU
 #define __align__(n)
 inline void cudaDeviceSynchronize() {}
 #define __shared__
@@ -39,7 +47,7 @@ inline void cudaDeviceSynchronize() {}
 #endif
 
 // Specialty copies
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 
 #define GOOFIT_CUDA_CHECK(function)                                                                                    \
     {                                                                                                                  \
@@ -110,7 +118,7 @@ auto get_device_symbol_address(const T &symbol) -> void * {
 #define BLOCKIDX (0)
 #define THREAD_SYNCH
 
-#elif THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
+#elif GOOFIT_DEVICE_IS_GPU
 
 #define THREADIDX (threadIdx.x)
 #define BLOCKDIM (blockDim.x)
@@ -118,11 +126,12 @@ auto get_device_symbol_address(const T &symbol) -> void * {
 #define THREAD_SYNCH __syncthreads();
 #endif
 
-// CUDA errors (only needed for explicit memory transfers)
-// For CUDA case, just use existing errors
+// GPU errors (only needed for explicit memory transfers).
+// For CUDA case, just use existing errors. On HIP, cuda_to_hip.h has already
+// mapped cudaError_t onto hipError_t, so neither arm applies.
 #if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
 #include <driver_types.h>
-#else
+#elif !GOOFIT_DEVICE_IS_GPU
 enum cudaError_t { cudaSuccess, cudaErrorMemoryAllocation };
 #endif
 

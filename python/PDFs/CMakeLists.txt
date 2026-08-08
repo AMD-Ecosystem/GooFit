@@ -3,5 +3,7 @@ target_sources(_goofit PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/CombinePdf.cpp")
 
 add_subdirectory(basic)
 add_subdirectory(combine)
-add_subdirectory(physics)
+if(GOOFIT_PHYSICS)
+  add_subdirectory(physics)
+endif()
 add_subdirectory(utilities)

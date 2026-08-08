@@ -557,7 +557,7 @@ __host__ void PdfBase::generateNormRange() {
 }
 
 auto gooMalloc(void **target, size_t bytes) -> cudaError_t {
-#if THRUST_DEVICE_SYSTEM != THRUST_DEVICE_SYSTEM_CUDA
+#if !GOOFIT_DEVICE_IS_GPU
     target[0] = malloc(bytes);
 
     if(target[0])
@@ -571,7 +571,7 @@ auto gooMalloc(void **target, size_t bytes) -> cudaError_t {
 }
 
 auto gooFree(void *ptr) -> cudaError_t {
-#if THRUST_DEVICE_SYSTEM != THRUST_DEVICE_SYSTEM_CUDA
+#if !GOOFIT_DEVICE_IS_GPU
     free(ptr);
     return cudaSuccess;
 #else

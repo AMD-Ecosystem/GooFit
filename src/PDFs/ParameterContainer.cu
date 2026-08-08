@@ -21,7 +21,7 @@ __device__ ParameterContainer::ParameterContainer(const ParameterContainer &pc)
 /// indices
 __device__ void
 ParameterContainer::incrementIndex(const int funcs, const int params, const int cons, const int obs, const int norms) {
-#if !defined(__CUDACC__) && defined(GOOFIT_TRACE_FLAG)
+#if !defined(__CUDACC__) && !defined(__HIPCC__) && defined(GOOFIT_TRACE_FLAG)
     if(funcs != 1)
         throw GeneralError("Haven't got a clue on how to proceed with incrementIndex checking, sorry");
     if(parameters[parameterIdx] != params || constants[constantIdx] != cons || observables[observableIdx] != obs

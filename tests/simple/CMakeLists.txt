@@ -1,4 +1,6 @@
-goofit_catch_test(VectorsTest)
+if(GOOFIT_PHYSICS)
+  goofit_catch_test(VectorsTest)
+endif()
 goofit_catch_test(NormalizeTest)
 goofit_catch_test(AddNormTest)
 goofit_catch_test(SimpleTest)

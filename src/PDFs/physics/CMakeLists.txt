@@ -9,6 +9,7 @@ endif()
 
 goofit_add_pdf_library(
   PDFPhysics
+  ${PROJECT_SOURCE_DIR}/src/PDFs/utilities/DebugTools.cu
   Amp3Body.cu
   Amp3BodyBase.cu
   Amp3Body_TD.cu

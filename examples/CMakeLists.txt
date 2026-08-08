@@ -63,14 +63,18 @@ if(ROOT_FOUND)
   add_subdirectory(addition)
   add_subdirectory(chisquare)
   add_subdirectory(convolution)
-  add_subdirectory(dalitz)
-  add_subdirectory(pipipi0DPFit)
   add_subdirectory(product)
-  add_subdirectory(SigGen)
   add_subdirectory(simpleFit)
   add_subdirectory(zachFit)
-  add_subdirectory(DP4)
-  add_subdirectory(TDDP4)
+
+  # These use the amplitude-analysis PDFs or MCBooster directly.
+  if(GOOFIT_PHYSICS)
+    add_subdirectory(dalitz)
+    add_subdirectory(pipipi0DPFit)
+    add_subdirectory(SigGen)
+    add_subdirectory(DP4)
+    add_subdirectory(TDDP4)
+  endif()
 endif()
 
 # Root not required

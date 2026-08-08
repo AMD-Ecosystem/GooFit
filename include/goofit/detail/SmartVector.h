@@ -4,7 +4,7 @@
 
 #include <vector>
 
-#if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
+#if GOOFIT_DEVICE_IS_GPU
 #include "SmartVectorGPU.h"
 #else
 #include "SmartVectorCPU.h"

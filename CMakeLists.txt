@@ -184,7 +184,7 @@ if(GOOFIT_TIME_COMPILE)
 endif()
 
 ### Options ###
-set(DEVICE_LISTING CUDA OMP CPP TBB Auto)
+set(DEVICE_LISTING CUDA HIP OMP CPP TBB Auto)
 set(HOST_LISTING OMP CPP TBB Auto)
 mark_as_advanced(DEVICE_LISTING HOST_LISTING)
 
@@ -257,7 +257,19 @@ else()
   set(IS_NOT_CUDA TRUE)
 endif()
 
+if(GOOFIT_DEVICE STREQUAL HIP)
+  set(IS_NOT_HIP FALSE)
+else()
+  set(IS_NOT_HIP TRUE)
+endif()
+
 option(GOOFIT_KMATRIX "Activate support for KMatrix (slower CUDA builds)" ${IS_NOT_CUDA})
+
+# The amplitude-analysis PDFs need MCBooster and a device-side Eigen complex
+# matrix inverse, neither of which compiles under hipcc yet. Everything gated by
+# this option -- the physics PDF library, the examples and Python bindings that
+# use it, and VectorsTest -- must agree, or the option only half applies.
+option(GOOFIT_PHYSICS "Build the amplitude-analysis (physics) PDFs" ${IS_NOT_HIP})
 
 # This is the common library that holds definitions, etc.
 add_library(GooFit_Common INTERFACE)
@@ -339,6 +351,28 @@ macro(GOOFIT_OPTIONAL_CUDA)
   endif()
 endmacro()
 
+# HIP/ROCm support, structured to mirror the CUDA path above.
+macro(GOOFIT_OPTIONAL_HIP)
+  if(GOOFIT_DEVICE STREQUAL HIP)
+    if(CMAKE_VERSION VERSION_LESS 3.21)
+      message(FATAL_ERROR "GOOFIT_DEVICE=HIP needs CMake 3.21 or newer (enable_language(HIP))")
+    endif()
+    enable_language(HIP)
+    set(CMAKE_HIP_STANDARD_REQUIRED ON)
+    set(CMAKE_HIP_EXTENSIONS OFF)
+    if(NOT DEFINED CMAKE_HIP_STANDARD)
+      set(CMAKE_HIP_STANDARD 17)
+    endif()
+
+    find_package(hip REQUIRED)
+    find_package(rocthrust REQUIRED)
+
+    # rocThrust headers (and GooFit's device sources, which use the CUDA runtime
+    # spelling) need the compat shim on every translation unit.
+    set(GOOFIT_HIP_COMPAT_HEADER "${GOOFIT_SOURCE_DIR}/include/goofit/detail/cuda_to_hip.h")
+  endif()
+endmacro()
+
 if(GOOFIT_DEVICE STREQUAL CUDA)
   # The old FindCUDA method
   goofit_optional_cuda()
@@ -381,6 +415,32 @@ if(GOOFIT_DEVICE STREQUAL CUDA)
                           INTERFACE_LINK_LIBRARIES "${CUDART_LIB}")
 endif()
 
+if(GOOFIT_DEVICE STREQUAL HIP)
+  goofit_optional_hip()
+
+  # rocThrust requires C++17; raise both the host and HIP standard from the
+  # GooFit default of 11.
+  if(CMAKE_CXX_STANDARD LESS 17)
+    set(CMAKE_CXX_STANDARD 17)
+  endif()
+
+  set(hip_lang "$<COMPILE_LANGUAGE:HIP>")
+
+  message(STATUS "Building GooFit for HIP/ROCm, arch ${CMAKE_HIP_ARCHITECTURES}")
+
+  # GooFit's device function-pointer tables and the __device__/__constant__
+  # globals declared in headers are defined in separate translation units and
+  # referenced across the whole library, so the device code must be relocatable
+  # (the CUDA build relies on CUDA_SEPARABLE_COMPILATION for the same reason).
+  # CMake has no HIP equivalent of that property, so -fgpu-rdc is set by hand,
+  # and it is needed on the final link as well as on every compile: the device
+  # link is what emits the fatbinary registration symbols.
+  target_compile_options(GooFit_Common INTERFACE "$<${hip_lang}:-fgpu-rdc>")
+  target_link_options(GooFit_Common INTERFACE "$<$<LINK_LANGUAGE:HIP>:-fgpu-rdc>")
+
+  target_link_libraries(GooFit_Common INTERFACE hip::host roc::rocthrust)
+endif()
+
 if(NOT DEFINED cuda_lang)
   set(cuda_lang 0)
 endif()
@@ -402,7 +462,11 @@ target_compile_options(
 option(GOOFIT_FORCE_LOCAL_THRUST
        "Use the bundled CCCL (Thrust/CUB/libcu++) instead of the system/toolkit copy" ON)
 
-if(GOOFIT_FORCE_LOCAL_THRUST)
+if(GOOFIT_DEVICE STREQUAL HIP)
+  # rocThrust (linked as roc::rocthrust above) is the Thrust implementation for
+  # this backend. Neither the bundled CCCL nor the toolkit copy is used: either
+  # on the include path would shadow rocThrust's own headers.
+elseif(GOOFIT_FORCE_LOCAL_THRUST)
   # extern/thrust is NVIDIA/CCCL: Thrust, CUB and libcu++ live in sibling
   # subtrees, so all three include roots go on the path (CUB is only used by the
   # CUDA backend, but adding it is harmless elsewhere).
@@ -517,7 +581,13 @@ message(STATUS "Compiler supports IPO: ${SUPPORTS_IPO_LOCAL}")
 
 # CUDA device LTO (what INTERPROCEDURAL_OPTIMIZATION enables for nvcc) hangs the
 # device linker, so keep IPO off for the CUDA backend even when it is supported.
-if(GOOFIT_DEVICE STREQUAL CUDA)
+# The HIP exclusion is precautionary rather than load-bearing. CMake applies
+# INTERPROCEDURAL_OPTIMIZATION only to C/CXX/CUDA/Fortran, so through 3.31 it
+# puts no -flto on a HIP compile line and this branch changes no flag. It is
+# here so that a CMake which later drives HIP IPO cannot combine -flto on the
+# compile line with the separate device link that -fgpu-rdc needs; compiled
+# that way by hand, hipcc leaves the fatbinary symbol undefined at link.
+if(GOOFIT_DEVICE STREQUAL CUDA OR GOOFIT_DEVICE STREQUAL HIP)
   set(SUPPORTS_IPO_LOCAL NO)
 endif()
 
@@ -525,6 +595,19 @@ endif()
 set(SUPPORTS_IPO
     "${SUPPORTS_IPO_LOCAL}"
     CACHE INTERNAL "")
+
+# GooFit's device code lives in .cu files and in .cpp files that include
+# rocThrust headers; both must be compiled by hipcc. Marking them LANGUAGE HIP
+# also brings the .cu objects into the device link (CMake otherwise drops .cu
+# objects when the project enabled HIP rather than CUDA).
+macro(GOOFIT_MARK_HIP_SOURCES)
+  foreach(N ${ARGN})
+    get_filename_component(NEXT ${N} EXT)
+    if(NEXT STREQUAL ".cu" OR NEXT STREQUAL ".cpp")
+      set_source_files_properties(${N} PROPERTIES LANGUAGE HIP)
+    endif()
+  endforeach()
+endmacro()
 
 function(GOOFIT_ADD_LIBRARY GNAME)
   set(options STATIC SHARED MODULE)
@@ -542,6 +625,11 @@ function(GOOFIT_ADD_LIBRARY GNAME)
   if(GOOFIT_DEVICE STREQUAL CUDA)
     add_library(${GNAME} ${GOOFIT_LIB_TYPE} ${GOOFIT_LIB_UNPARSED_ARGUMENTS})
     set_target_properties(${GNAME} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+  elseif(GOOFIT_DEVICE STREQUAL HIP)
+    goofit_mark_hip_sources(${GOOFIT_LIB_UNPARSED_ARGUMENTS})
+    add_library(${GNAME} ${GOOFIT_LIB_TYPE} ${GOOFIT_LIB_UNPARSED_ARGUMENTS})
+    target_compile_options(${GNAME} PRIVATE
+                           "$<$<COMPILE_LANGUAGE:HIP>:-include;${GOOFIT_HIP_COMPAT_HEADER}>")
   else()
     foreach(N ${GOOFIT_LIB_UNPARSED_ARGUMENTS})
       get_filename_component(NEXT ${N} EXT)
@@ -578,6 +666,11 @@ endfunction()
 function(GOOFIT_ADD_EXECUTABLE NAMEEXE)
   if(GOOFIT_DEVICE STREQUAL CUDA)
     add_executable(${NAMEEXE} ${ARGN})
+  elseif(GOOFIT_DEVICE STREQUAL HIP)
+    goofit_mark_hip_sources(${ARGN})
+    add_executable(${NAMEEXE} ${ARGN})
+    target_compile_options(${NAMEEXE} PRIVATE
+                           "$<$<COMPILE_LANGUAGE:HIP>:-include;${GOOFIT_HIP_COMPAT_HEADER}>")
   else()
     foreach(N ${ARGN})
       get_filename_component(NEXT ${N} EXT)
@@ -672,6 +765,7 @@ endmacro()
 macro(GOOFIT_EXTERNAL_PACKAGE)
   goofit_setup_std()
   goofit_optional_cuda()
+  goofit_optional_hip()
   goofit_add_directory()
 endmacro()
 
@@ -751,6 +845,7 @@ add_feature_info("GOOFIT_DEVICE=${GOOFIT_DEVICE}" ON "The device to compile for"
 add_feature_info("GOOFIT_HOST=${GOOFIT_HOST}" ON "The host system to compile for")
 
 feature_option(GOOFIT_KMATRIX)
+feature_option(GOOFIT_PHYSICS)
 feature_option(GOOFIT_TRACE)
 feature_option(GOOFIT_DEBUG)
 feature_option(GOOFIT_MPI)

@@ -51,15 +51,9 @@ __device__ auto MetricTaker::operator()(thrust::tuple<int, int, fptype *> t) con
     int evtSize   = thrust::get<1>(t);
     int binNumber = thrust::get<0>(t);
 
-    auto *events = new fptype[10];
-
-    // for (int i = 0; i < evtSize; i++)
-    //    pc.events[i] =
-
-    // Do not understand why this cannot be declared __shared__. Dynamically allocating shared memory is apparently
-    // complicated.
-    // fptype* binCenters = (fptype*) malloc(evtSize * sizeof(fptype));
-    // fptype binCenters[MAX_NUM_OBSERVABLES];
+    // A fixed per-thread array, as in CompositePdf: the device heap serializes
+    // and the size needed here is bounded by MAX_NUM_OBSERVABLES anyway.
+    fptype events[MAX_NUM_OBSERVABLES];
 
     // To convert global bin number to (x,y,z...) coordinates: For each dimension, take the mod
     // with the number of bins in that dimension. Then divide by the number of bins, in effect
@@ -87,10 +81,7 @@ __device__ auto MetricTaker::operator()(thrust::tuple<int, int, fptype *> t) con
         binNumber /= numBins;
     }
 
-    // Causes stack size to be statically undeterminable.
     fptype ret = callFunction(events, pc);
-
-    delete[] events;
 
     return ret;
 }
@@ -114,7 +105,7 @@ MetricTaker::MetricTaker(PdfBase *dat, void *dev_functionPtr)
 
     // Set a larger stack size. Needed for the kMatrix because the stack size
     // can't be determined at runtime.
-#if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
+#if GOOFIT_DEVICE_IS_GPU
     cuda_error_check(cudaDeviceSetLimit(cudaLimitStackSize, CUDA_STACKSIZE));
     size_t limit = 0;
     cudaDeviceGetLimit(&limit, cudaLimitStackSize);
@@ -129,7 +120,7 @@ MetricTaker::MetricTaker(int fIdx, int pIdx)
 
     // Set a larger stack size. Needed for the kMatrix because the stack size
     // can't be determined at runtime.
-#if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
+#if GOOFIT_DEVICE_IS_GPU
     cuda_error_check(cudaDeviceSetLimit(cudaLimitStackSize, CUDA_STACKSIZE));
     size_t limit = 0;
     cudaDeviceGetLimit(&limit, cudaLimitStackSize);

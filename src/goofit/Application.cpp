@@ -18,8 +18,12 @@
 #include <RVersion.h>
 #endif
 
-#if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
+#if GOOFIT_DEVICE_IS_GPU
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#include <hip/hip_runtime.h>
+#else
 #include <cuda_runtime.h>
+#endif
 #endif
 
 #if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_OMP || THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_TBB
@@ -84,31 +88,54 @@ auto goofit_info_version() -> std::string {
     return fmt::format("GooFit: Version {} ({}) Commit: {}", GOOFIT_VERSION, GOOFIT_TAG, GOOFIT_GIT_VERSION);
 }
 
+#if GOOFIT_DEVICE_IS_GPU
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#define GOOFIT_GPU_LABEL "HIP"
+
+// AMD reports a gfx architecture name; major/minor carry no compute capability.
+auto goofit_device_arch(const cudaDeviceProp &prop) -> std::string {
+    return fmt::format("Architecture: {}", prop.gcnArchName);
+}
+#else
+#define GOOFIT_GPU_LABEL "CUDA"
+
+auto goofit_device_arch(const cudaDeviceProp &prop) -> std::string {
+    return fmt::format("Compute {}.{}", prop.major, prop.minor);
+}
+#endif
+#endif
+
 auto goofit_info_device(int gpuDev_) -> std::string {
     std::string output;
-#if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
+#if GOOFIT_DEVICE_IS_GPU
     if(gpuDev_ >= 0) {
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+        output += fmt::format("HIP {}.{}\n", HIP_VERSION_MAJOR, HIP_VERSION_MINOR);
+#else
         output += fmt::format("CUDA {}.{}\n", CUDART_VERSION / 1000, (CUDART_VERSION % 100) / 10.);
+#endif
 
         int nDev = 0;
         cudaGetDeviceCount(&nDev);
-        output += fmt::format("CUDA: Number of devices: {}\n", nDev);
+        output += fmt::format("{}: Number of devices: {}\n", GOOFIT_GPU_LABEL, nDev);
 
         if(nDev > 0) {
             cudaDeviceProp devProp;
             cudaGetDeviceProperties(&devProp, gpuDev_);
-            output += fmt::format("CUDA: Device {}: {}\n", gpuDev_, devProp.name);
+            output += fmt::format("{}: Device {}: {}\n", GOOFIT_GPU_LABEL, gpuDev_, devProp.name);
 
-            output += fmt::format("CUDA: Compute {}.{}\n", devProp.major, devProp.minor);
-            output += fmt::format("CUDA: Total global memory: {} GB\n", devProp.totalGlobalMem / 1.0e9);
-            output += fmt::format("CUDA: Multiprocessors: {}", devProp.multiProcessorCount);
+            output += fmt::format("{}: {}\n", GOOFIT_GPU_LABEL, goofit_device_arch(devProp));
+            output
+                += fmt::format("{}: Total global memory: {} GB\n", GOOFIT_GPU_LABEL, devProp.totalGlobalMem / 1.0e9);
+            output += fmt::format("{}: Multiprocessors: {}", GOOFIT_GPU_LABEL, devProp.multiProcessorCount);
 
 #ifdef GOOFIT_DEBUG_FLAG
-            output += fmt::format("\nCUDA: Total amount of shared memory per block: {}\n", devProp.sharedMemPerBlock);
-            output += fmt::format("CUDA: Total registers per block: {}\n", devProp.regsPerBlock);
-            output += fmt::format("CUDA: Warp size: {}\n", devProp.warpSize);
-            output += fmt::format("CUDA: Maximum memory pitch: {}\n", devProp.memPitch);
-            output += fmt::format("CUDA: Total amount of constant memory: {}", devProp.totalConstMem);
+            output += fmt::format(
+                "\n{}: Total amount of shared memory per block: {}\n", GOOFIT_GPU_LABEL, devProp.sharedMemPerBlock);
+            output += fmt::format("{}: Total registers per block: {}\n", GOOFIT_GPU_LABEL, devProp.regsPerBlock);
+            output += fmt::format("{}: Warp size: {}\n", GOOFIT_GPU_LABEL, devProp.warpSize);
+            output += fmt::format("{}: Maximum memory pitch: {}\n", GOOFIT_GPU_LABEL, devProp.memPitch);
+            output += fmt::format("{}: Total amount of constant memory: {}", GOOFIT_GPU_LABEL, devProp.totalConstMem);
 #endif
         }
     }
@@ -139,18 +166,18 @@ void print_goofit_info(int gpuDev_) {
     std::cout << cpu_feature_warnings();
     std::cout << GooFit::reset << std::flush;
 
-#if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
+#if GOOFIT_DEVICE_IS_GPU
     int deviceCount;
     cudaGetDeviceCount(&deviceCount);
 
     for(int i = 0; i < deviceCount; i++) {
         cudaDeviceProp deviceProp;
         cudaGetDeviceProperties(&deviceProp, i);
-        GOOFIT_INFO("CUDA: {} {}: Compute {}.{}; Memory {} GB",
+        GOOFIT_INFO("{}: {} {}: {}; Memory {} GB",
+                    GOOFIT_GPU_LABEL,
                     i,
                     deviceProp.name,
-                    deviceProp.major,
-                    deviceProp.minor,
+                    goofit_device_arch(deviceProp),
                     deviceProp.totalGlobalMem / pow(1024.0, 3.0));
     }
 #endif
@@ -168,7 +195,7 @@ Application::Application(std::string description, int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &numProcs);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
 
-#if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
+#if GOOFIT_DEVICE_IS_GPU
     int deviceCount;
     cudaGetDeviceCount(&deviceCount);
 
@@ -210,7 +237,7 @@ Application::Application(std::string description, int argc, char **argv)
     // Fallthrough is useful for most models of GooFit subcommands
     fallthrough();
 
-#if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
+#if GOOFIT_DEVICE_IS_GPU
 #ifndef GOOFIT_MPI
     add_option("--gpu-dev", gpuDev_, "GPU device to use")->capture_default_str()->group("GooFit");
 #endif
@@ -254,7 +281,7 @@ void Application::pre_callback() {
 void Application::run() { parse(argc_, argv_); }
 
 void Application::set_device() const {
-#if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
+#if GOOFIT_DEVICE_IS_GPU
     if(gpuDev_ >= 0) {
         cudaSetDevice(gpuDev_);
     }
@@ -283,10 +310,10 @@ Application::~Application() {
 #endif
 }
 
-// This function call is enabled for macOS, too. Will not have an affect for CUDA code.
+// This function call is enabled for macOS, too. Will not have an affect for GPU code.
 void Application::set_floating_exceptions() {
-#if THRUST_DEVICE_SYSTEM == THRUST_DEVICE_SYSTEM_CUDA
-    GOOFIT_INFO("CUDA does not support floating point exceptions. Please recompile in OMP or CPP mode.");
+#if GOOFIT_DEVICE_IS_GPU
+    GOOFIT_INFO("GPU devices do not support floating point exceptions. Please recompile in OMP or CPP mode.");
 #else
     feenableexcept(FE_DIVBYZERO | FE_INVALID);
 #endif

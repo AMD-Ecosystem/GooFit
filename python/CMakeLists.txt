@@ -50,7 +50,11 @@ add_subdirectory(goofit)
 add_subdirectory(PDFs)
 
 process_pybind_module(_goofit)
-target_link_libraries(_goofit PRIVATE _goofit_python _Core _Basic _Combine _Physics)
+target_link_libraries(_goofit PRIVATE _goofit_python _Core _Basic _Combine)
+if(GOOFIT_PHYSICS)
+  target_link_libraries(_goofit PRIVATE _Physics)
+  target_compile_definitions(_goofit PRIVATE GOOFIT_PHYSICS)
+endif()
 
 # Create files in the python directory
 

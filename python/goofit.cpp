@@ -48,6 +48,7 @@ void init_MappedPdf(py::module &);
 void init_ProdPdf(py::module &);
 
 // Physics
+#ifdef GOOFIT_PHYSICS
 void init_DalitzPlotHelpers(py::module &);
 void init_AmpNBodyBase(py::module &);
 void init_Amp3BodyBase(py::module &);
@@ -68,6 +69,7 @@ void init_ThreeGaussResolutionExt(py::module &);
 void init_ThreeGaussResolutionSplice(py::module &);
 void init_TruthResolution(py::module &);
 void init_SquareDalitzEffPdf(py::module &);
+#endif
 
 // Utilities
 void init_VariableBinTransform1DPdf(py::module &);
@@ -122,6 +124,7 @@ PYBIND11_MODULE(_goofit, m) {
     init_ProdPdf(m);
 
     // Physics
+#ifdef GOOFIT_PHYSICS
     init_DalitzPlotHelpers(m);
     init_DalitzPlotter(m);
     init_AmpNBodyBase(m);
@@ -142,6 +145,7 @@ PYBIND11_MODULE(_goofit, m) {
     init_ThreeGaussResolutionSplice(m);
     init_TruthResolution(m);
     init_SquareDalitzEffPdf(m);
+#endif
 
     // Utilities
     init_VariableBinTransform1DPdf(m);

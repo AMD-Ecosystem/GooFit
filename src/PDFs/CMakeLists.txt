@@ -13,7 +13,6 @@ set(GOOPDF_FILE_LISTING
     ParameterContainer.cu
     PdfBase.cu
     utilities/VariableBinTransform1DPdf.cu
-    utilities/DebugTools.cu
     ${GOOFIT_PDF_HEADERS})
 
 macro(goofit_add_pdf_library NAME)
@@ -28,7 +27,14 @@ set_target_properties(PDFCore PROPERTIES FOLDER "pdfs")
 
 add_subdirectory(basic)
 add_subdirectory(combine)
-add_subdirectory(physics)
+
+if(GOOFIT_PHYSICS AND GOOFIT_DEVICE STREQUAL HIP)
+  message(FATAL_ERROR "GOOFIT_PHYSICS is not supported on HIP yet; configure with -DGOOFIT_PHYSICS=OFF")
+endif()
 
 add_library(PDFs INTERFACE)
-target_link_libraries(PDFs INTERFACE PDFBasic PDFCombine PDFPhysics)
+target_link_libraries(PDFs INTERFACE PDFBasic PDFCombine)
+if(GOOFIT_PHYSICS)
+  add_subdirectory(physics)
+  target_link_libraries(PDFs INTERFACE PDFPhysics)
+endif()
