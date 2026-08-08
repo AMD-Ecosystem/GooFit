@@ -12,7 +12,7 @@
   <img width="495" height="220" src="https://raw.githubusercontent.com/GooFit/GooFit/master/docs/GooFitLogo.png"/>
 </p>
 
-GooFit is a massively-parallel framework, written using Thrust for CUDA and OpenMP, for
+GooFit is a massively-parallel framework, written using Thrust for CUDA, ROCm and OpenMP, for
 doing maximum-likelihood fits with a familiar syntax.
 
 [What's new](./docs/CHANGELOG.md)
@@ -41,6 +41,16 @@ https://github.com/GooFit/GooFit/labels/critical https://github.com/GooFit/GooFi
     * CUDA 9.0, 9.1: Buggy, see [known issues](https://github.com/GooFit/GooFit/issues/173)
     * CUDA 10.1, 10.2: Not yet supported due to Thrust 1.8 incompatibility
 * An nVidia GPU supporting compute capability at least 3.0 (3.5+ recommended)
+
+</p></details>
+
+<details><summary>If using ROCm (AMD GPUs): (click to expand)</summary><p>
+
+* CMake 3.21+ (the first release with HIP language support)
+* ROCm 7.2 or newer, providing `hipcc` and rocThrust (`rocm-hip-sdk` and `rocthrust-dev` on Ubuntu). Older releases have not been tried
+* An AMD GPU supported by your ROCm release. This backend is developed and tested on `gfx1100`; nothing in it is architecture-specific, but other GPUs have not been exercised yet
+* rocThrust supplies Thrust, so the bundled CCCL in `extern/thrust` is kept off the include path
+* The amplitude-analysis PDFs are not yet available on this backend, so `GOOFIT_PHYSICS` defaults to `OFF` here
 
 </p></details>
 
@@ -125,12 +135,19 @@ If you want to change compiler, set `CC` and `CXX` to appropriate defaults *befo
 cmake .. -DGOOFIT_DEVICE=CUDA -DGOOFIT_HOST=CPP
 ```
 
-Valid options are `CUDA` (device only), `OMP`, `TBB`, and `CPP`. The Thrust `TBB` backend requires the Intel compiler.  The default device is `Auto`, and will select `CUDA` if CUDA is found, `OMP` or `CPP` otherwise.
+Valid options are `CUDA` (device only), `HIP` (device only), `OMP`, `TBB`, and `CPP`. The Thrust `TBB` backend requires the Intel compiler.  The default device is `Auto`, and will select `CUDA` if CUDA is found, `OMP` or `CPP` otherwise; `HIP` is never selected automatically, so ask for it explicitly on an AMD GPU:
+
+```bash
+cmake .. -DGOOFIT_DEVICE=HIP -DCMAKE_HIP_ARCHITECTURES=gfx1100
+```
+
+This uses `hipcc` and rocThrust from your ROCm install; the bundled CCCL in `extern/thrust` is kept off the include path so it cannot shadow rocThrust's headers. Set `CMAKE_HIP_ARCHITECTURES` to the GPU you are building for; `rocminfo | grep gfx` reports it. The amplitude-analysis PDFs are not yet available on this backend, so `GOOFIT_PHYSICS` defaults to `OFF` here.
 
 Other custom options supported along with the defaults:
 
-* `-DGOOFIT_DEVICE=Auto`: The device to use for computation (`CUDA`, `OMP`, `TBB`, or `CPP`). Default setting of `Auto` looks for CUDA first, then OpenMP, then CPP.
-* `-DGOOFIT_ARCH=Auto`: (`Auto`, `Common`, `All`, valid number(s) or name(s)): sets the compute architecture. See [CUDA_SELECT_NVCC_ARCH_FLAGS][]. Can be set to `OFF` to avoid adding any flags.
+* `-DGOOFIT_DEVICE=Auto`: The device to use for computation (`CUDA`, `HIP`, `OMP`, `TBB`, or `CPP`). Default setting of `Auto` looks for CUDA first, then OpenMP, then CPP.
+* `-DGOOFIT_ARCH=Auto`: (`Auto`, `Common`, `All`, valid number(s) or name(s)): sets the compute architecture. See [CUDA_SELECT_NVCC_ARCH_FLAGS][]. Can be set to `OFF` to avoid adding any flags. On the `HIP` device use `-DCMAKE_HIP_ARCHITECTURES` instead.
+* `-DGOOFIT_PHYSICS=ON`: Build the amplitude-analysis PDFs. Defaults to `OFF` on the `HIP` device, which does not support them yet.
 * `-DGOOFIT_EXAMPLES=ON`: Build the examples
 * `-DGOOFIT_PACKAGES=ON`: Build any packages found with the name `goofit_*`
 * `-DGOOFIT_DEBUG=ON` and `-DGOOFIT_TRACE=ON` will enable the matching printout macros

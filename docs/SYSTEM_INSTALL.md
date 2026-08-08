@@ -107,6 +107,23 @@ source root-6/bin/thisroot.sh
 
 </p></details>
 
+<details><summary>Ubuntu with ROCm, for AMD GPUs (click to expand)</summary><p>
+
+Install ROCm following [AMD's instructions](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/), which provides the `hipcc` compiler and rocThrust. The `HIP` device is never chosen automatically, so name it along with the GPU you are building for.
+
+```bash
+apt update && apt install -y git cmake ninja-build g++ rocm-hip-sdk rocthrust-dev
+git clone --recursive https://github.com/GooFit/GooFit.git
+cd GooFit
+cmake -S . -B build -GNinja -DGOOFIT_DEVICE=HIP -DCMAKE_HIP_ARCHITECTURES=gfx1100
+cmake --build build
+ctest --test-dir build
+```
+
+Replace `gfx1100` with your GPU; `rocminfo | grep gfx` reports it. This backend takes Thrust from rocThrust, so the bundled CCCL in `extern/thrust` is kept off the include path. The amplitude-analysis PDFs are not yet available on this backend, so `GOOFIT_PHYSICS` defaults to `OFF` here.
+
+</p></details>
+
 <details><summary>OpenSUSE (click to expand)</summary><p>
 
 If you use `make`, adding `-jN` where `N` is the number of cores will make builds much faster on multicore systems! `ninja` does this automatically.
