@@ -1,26 +1,28 @@
-add_library(
-  _Basic STATIC
-  ArgusPdf.cpp
-  BifurGaussPdf.cpp
-  BinTransformPdf.cpp
-  BernsteinPdf.cpp
-  BWPdf.cpp
-  CorrGaussianPdf.cpp
-  CrystalBallPdf.cpp
-  ExpGausPdf.cpp
-  ExpPdf.cpp
-  GaussianPdf.cpp
-  InterHistPdf.cpp
-  JohnsonSUPdf.cpp
-  KinLimitBWPdf.cpp
-  LandauPdf.cpp
-  NovosibirskPdf.cpp
-  PolynomialPdf.cpp
-  ScaledGaussianPdf.cpp
-  SmoothHistogramPdf.cpp
-  StepPdf.cpp
-  TrigThresholdPdf.cpp
-  VoigtianPdf.cpp)
+set(_BASIC_SOURCES
+    ArgusPdf.cpp
+    BifurGaussPdf.cpp
+    BinTransformPdf.cpp
+    BernsteinPdf.cpp
+    BWPdf.cpp
+    CorrGaussianPdf.cpp
+    CrystalBallPdf.cpp
+    ExpGausPdf.cpp
+    ExpPdf.cpp
+    GaussianPdf.cpp
+    InterHistPdf.cpp
+    JohnsonSUPdf.cpp
+    KinLimitBWPdf.cpp
+    LandauPdf.cpp
+    NovosibirskPdf.cpp
+    PolynomialPdf.cpp
+    ScaledGaussianPdf.cpp
+    SmoothHistogramPdf.cpp
+    StepPdf.cpp
+    TrigThresholdPdf.cpp
+    VoigtianPdf.cpp)
+
+add_library(_Basic STATIC ${_BASIC_SOURCES})
+goofit_adopt_hip_target(_Basic ${_BASIC_SOURCES})
 
 target_link_libraries(_Basic PRIVATE _goofit_python)
 set_target_properties(_Basic PROPERTIES FOLDER python/PDFs CUDA_RESOLVE_DEVICE_SYMBOLS ON)

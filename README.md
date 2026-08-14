@@ -48,7 +48,7 @@ https://github.com/GooFit/GooFit/labels/critical https://github.com/GooFit/GooFi
 
 * CMake 3.21+ (the first release with HIP language support)
 * ROCm 7.2 or newer, providing `hipcc` and rocThrust (`rocm-hip-sdk` and `rocthrust-dev` on Ubuntu). Older releases have not been tried
-* An AMD GPU supported by your ROCm release. This backend is developed and tested on `gfx1100`; nothing in it is architecture-specific, but other GPUs have not been exercised yet
+* An AMD GPU supported by your ROCm release. Nothing in this backend is architecture-specific; it has been built and tested on `gfx90a`, `gfx942` and `gfx1100`
 * rocThrust supplies Thrust, so the bundled CCCL in `extern/thrust` is kept off the include path
 * The amplitude-analysis PDFs are not yet available on this backend, so `GOOFIT_PHYSICS` defaults to `OFF` here
 

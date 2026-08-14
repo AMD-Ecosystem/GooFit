@@ -609,6 +609,33 @@ macro(GOOFIT_MARK_HIP_SOURCES)
   endforeach()
 endmacro()
 
+# The same treatment for the pybind11 modules under python/, which are built
+# with a plain add_library() and target_sources() rather than the two functions
+# below. Their sources reach Thrust through the GooFit headers, so on this
+# backend they are rocThrust sources and need hipcc; left as C++ they are still
+# handed the device compile options that come with the ROCm imported targets,
+# and the host compiler rejects them. Both are no-ops on every other backend.
+#
+# For sources appended with target_sources() from a subdirectory: the target
+# already carries the compat header, so only the language is missing, and the
+# property has to be set in the scope that owns the target rather than in the
+# scope that owns the file.
+macro(GOOFIT_ADOPT_HIP_SOURCES TNAME)
+  if(GOOFIT_DEVICE STREQUAL HIP)
+    set_source_files_properties(${ARGN} TARGET_DIRECTORY ${TNAME} PROPERTIES LANGUAGE HIP)
+  endif()
+endmacro()
+
+# ...and for a whole target, called after add_library() in the directory that
+# owns the sources, since source properties are directory-scoped:
+macro(GOOFIT_ADOPT_HIP_TARGET TNAME)
+  if(GOOFIT_DEVICE STREQUAL HIP)
+    goofit_mark_hip_sources(${ARGN})
+    target_compile_options(
+      ${TNAME} PRIVATE "$<$<COMPILE_LANGUAGE:HIP>:-include;${GOOFIT_HIP_COMPAT_HEADER}>")
+  endif()
+endmacro()
+
 function(GOOFIT_ADD_LIBRARY GNAME)
   set(options STATIC SHARED MODULE)
   set(oneValueArgs "")
@@ -628,8 +655,8 @@ function(GOOFIT_ADD_LIBRARY GNAME)
   elseif(GOOFIT_DEVICE STREQUAL HIP)
     goofit_mark_hip_sources(${GOOFIT_LIB_UNPARSED_ARGUMENTS})
     add_library(${GNAME} ${GOOFIT_LIB_TYPE} ${GOOFIT_LIB_UNPARSED_ARGUMENTS})
-    target_compile_options(${GNAME} PRIVATE
-                           "$<$<COMPILE_LANGUAGE:HIP>:-include;${GOOFIT_HIP_COMPAT_HEADER}>")
+    target_compile_options(
+      ${GNAME} PRIVATE "$<$<COMPILE_LANGUAGE:HIP>:-include;${GOOFIT_HIP_COMPAT_HEADER}>")
   else()
     foreach(N ${GOOFIT_LIB_UNPARSED_ARGUMENTS})
       get_filename_component(NEXT ${N} EXT)
@@ -669,8 +696,8 @@ function(GOOFIT_ADD_EXECUTABLE NAMEEXE)
   elseif(GOOFIT_DEVICE STREQUAL HIP)
     goofit_mark_hip_sources(${ARGN})
     add_executable(${NAMEEXE} ${ARGN})
-    target_compile_options(${NAMEEXE} PRIVATE
-                           "$<$<COMPILE_LANGUAGE:HIP>:-include;${GOOFIT_HIP_COMPAT_HEADER}>")
+    target_compile_options(
+      ${NAMEEXE} PRIVATE "$<$<COMPILE_LANGUAGE:HIP>:-include;${GOOFIT_HIP_COMPAT_HEADER}>")
   else()
     foreach(N ${ARGN})
       get_filename_component(NEXT ${N} EXT)
